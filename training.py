@@ -123,7 +123,7 @@ def train_model(
     # 6. Define loss & optimizer & scheduler
     criterion = nn.HuberLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.8) # after each step_size = N update /// newLR = oldRL * gamma
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8) # after each step_size = N update /// newLR = oldRL * gamma
 
     logger.info(f"Optimizer: AdamW, LR={lr}")
     logger.info("Using HuberLoss as training criterion")
@@ -237,13 +237,13 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='ConvTransformerNet',
+        model_choice='Conv1DNet',
         batch_size=64,
         lr=1e-4,
-        epochs=5,
+        epochs=200,
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")
-    logger.info(f"Epoch times: {epoch_times}")
+    #logger.info(f"Epoch times: {epoch_times}")
 
 if __name__ == "__main__":
     main()
