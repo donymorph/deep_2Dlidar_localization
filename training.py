@@ -223,7 +223,7 @@ def train_model(
 
     # Construct model file name
     model_filename = f"models/{model_choice}_lr{lr}_bs{batch_size}_{timestamp}.pth"
-    #torch.save(model.state_dict(), model_filename)
+    torch.save(model.state_dict(), model_filename)
     logger.info(f"Model training complete. Saved to '{model_filename}'")
 
 
