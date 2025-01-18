@@ -3,7 +3,7 @@
 ## About the Project
 
 This project focuses on localization using only 2D LiDAR scan point clouds, leveraging deep learning techniques to achieve precise position estimation. It aims to serve as a robust solution for robotics applications where minimal sensor inputs are available.
-
+![Alt text](images/Workflow.png)
 ---
 
 ## Getting Started
@@ -139,6 +139,7 @@ tensorboard --logdir tensorboard_logs/
 
 Access the TensorBoard UI in your browser at `http://localhost:6006`.
 
+![Alt text](images/tensorboard.png)
 ---
 
 ## Requirements

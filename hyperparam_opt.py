@@ -23,8 +23,8 @@ except ImportError:
 #########################################################
 def grid_search_hyperparams():
     model_choices = ['ConvTransformerNet']  # Example: ['SimpleMLP', 'DeeperMLP', 'Conv1DNet']
-    lrs = [1e-4, 1e-3, 1e-2]
-    batch_sizes = [16, 32, 64]
+    lrs = [1e-5,1e-4, 1e-3, 1e-2]
+    batch_sizes = [16, 32, 64, 128]
 
     best_loss = float('inf')
     best_config = None
@@ -40,7 +40,7 @@ def grid_search_hyperparams():
                     model_choice=model_choice,
                     batch_size=batch_size,
                     lr=lr,
-                    epochs=1,
+                    epochs=30,
                     train_ratio=0.7,
                     val_ratio=0.2,
                     test_ratio=0.1,
@@ -113,8 +113,8 @@ def bayesian_opt_hyperparams(n_calls=10):
     # Define the search space
     space = [
         Categorical(['ConvTransformerNet'], name='model_choice'),
-        Real(1e-4, 1e-2, prior='log-uniform', name='lr'),
-        Categorical([16, 32, 64], name='batch_size'),
+        Real(1e-5, 1e-2, prior='log-uniform', name='lr'),
+        Categorical([16, 32, 64, 128], name='batch_size'),
     ]
 
     @use_named_args(space)
@@ -126,7 +126,7 @@ def bayesian_opt_hyperparams(n_calls=10):
             model_choice=model_choice,
             batch_size=batch_size,
             lr=lr,
-            epochs=5,
+            epochs=30,
             train_ratio=0.7,
             val_ratio=0.2,
             test_ratio=0.1,
@@ -176,12 +176,12 @@ def main():
     #plot_results(grid_results, title="Grid Search Results")
 
     # 2) Random Search
-    random_results = random_search_hyperparams(num_experiments=5)
+    #random_results = random_search_hyperparams(num_experiments=5)
     #plot_results(random_results, title="Random Search Results")
 
     # 3) Bayesian Optimization
-    if SKOPT_AVAILABLE:
-        bayesian_results = bayesian_opt_hyperparams(n_calls=10)
+    # if SKOPT_AVAILABLE:
+    #     bayesian_results = bayesian_opt_hyperparams(n_calls=20)
 
 if __name__ == "__main__":
     main()
