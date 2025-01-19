@@ -237,7 +237,7 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='Conv1DNet',
+        model_choice='Conv1DNet', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet
         batch_size=64,
         lr=1e-4,
         epochs=200,

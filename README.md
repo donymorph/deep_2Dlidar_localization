@@ -1,3 +1,7 @@
+## 🌐 Language Selection 语言选择
+
+- 🇬🇧 [English Version](README.md)
+- 🇨🇳 [简体中文版](README_CN.md)
 # Deep 2D LiDAR Localization
 
 ## About the Project
@@ -114,7 +118,7 @@ Key options for the script include:
 Example:
 
 ```bash
-python3 training.py --odom_csv odom_data.csv --scan_csv scan_data.csv --model_choice ConvTransformerNet --batch_size 64 --lr 1e-4 --epochs 20
+python3 training.py #--odom_csv odom_data.csv --scan_csv scan_data.csv --model_choice ConvTransformerNet --batch_size 64 --lr 1e-4 --epochs 20
 ```
 
 ### 3. Hyperparameter Optimization
