@@ -36,7 +36,7 @@ class ScanToOdomInferenceNode(Node):
         ############################
         self.model_initialized = False
         self.model = None
-        self.model_name = 'ConvTransformerNet_lr0.0001_bs64_20250118_010611.pth' # change it according to name of model
+        self.model_name = 'ConvTransformerNet_lr0.0001_bs64_20250118_050502.pth' # change it according to name of model
         # Robot 2D state: x, y, yaw
         self.x = 0.0
         self.y = 0.0

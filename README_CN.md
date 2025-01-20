@@ -137,6 +137,21 @@ tensorboard --logdir tensorboard_logs/
 
 ![可视化结果](images/tensorboard.png)
 
+训练结束后，会弹出这个图，它会告诉你训练的模型有多好和准确，它会获取测试样本数据并计算准确度。任务是最小化地面真实值和预测值之间的距离。阈值为 10 厘米，如果地面真实值和预测点之间的距离在 10 厘米以内，则认为有效，否则会累积误差。如果达到 100% 的准确度，你可以降低阈值，使其成为 0.01 或更小的数字。但要小心不要过度拟合模型。绘制时使用大约 200 个样本点，计算准确度时所有样本都通过。
+ 
+演示图片
+![Alt text](images/accuracy_plot_sample.png)
+
+训练后，你甚至可以使用实际数据集数据、动画版本进一步测试模型并保存为 mp4
+```bash
+python3 testing_model.py # 指定 model_path 和 model_choice 在脚本中
+```
+<video controls src="images/fig.mp4" title="Title"></video>
+
+## 可视化数据分布
+![Alt text](images/data_distribution.png)
+
+
 ---
 
 ## 依赖

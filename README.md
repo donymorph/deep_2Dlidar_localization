@@ -144,6 +144,21 @@ tensorboard --logdir tensorboard_logs/
 Access the TensorBoard UI in your browser at `http://localhost:6006`.
 
 ![Alt text](images/tensorboard.png)
+ After training this plot will pop up,  it tells how good and accurate your trained model, it takes test sample data and calculates the accuracy. the task is minimizing the distance between ground thruth and predicted values. threshold is 10 cm if the distance between ground truth and predicted point within 10 cm, its considered valid otherwise accumulates error. in case you reached 100% accuracy you can decrease the threshold, make it 0.01 or even smaller number. but careful not to overfit the model. for plotting around 200 sample points is used, for calculating the accuracy all samples are passed. 
+ 
+ demo picture
+![Alt text](images/accuracy_plot_sample.png)
+
+after training you can even further test the model with actual dataset data, animated version and save as mp4
+```bash
+python3 testing_model.py # specify model_path and model_choice in the script
+```
+<video controls src="images/fig.mp4" title="Title"></video>
+
+## Visual Data distribution
+![Alt text](images/data_distribution.png)
+
+
 ---
 
 ## Requirements
@@ -155,7 +170,6 @@ pip freeze > requirements.txt
 ```
 
 ---
-
 ## Contributions
 
 We welcome contributions, issues, and feature requests to help improve this project. Here's how you can contribute:

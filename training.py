@@ -1,3 +1,4 @@
+# training.py
 import time
 import logging
 import torch
@@ -14,7 +15,7 @@ from architectures import (
     ConvTransformerNet
 )
 from splitting import split_dataset
-
+from utils.utils import visualize_test_loader_static 
 # ---------------------------
 # Setup Python logging
 # ---------------------------
@@ -45,7 +46,8 @@ def train_model(
     val_ratio=0.2,
     test_ratio=0.1,
     random_seed=42,
-    log_dir=None # TensorBoard logdir
+    log_dir=None, # TensorBoard logdir
+    do_visualize=False
 ):
     """
     Train a LiDAR->Velocity model. Returns final test loss, epoch_times.
@@ -229,6 +231,12 @@ def train_model(
 
     # Close TensorBoard writer
     writer.close()
+    # If do_visualize => plot using the test_loader
+    if do_visualize:
+        logger.info("Starting Matplotlib animation on test_loader data...")
+        visualize_test_loader_static(model, test_loader, device=device, max_samples=total_samples) 
+        logger.info("Animation done.")
+
 
     # Return final test loss + epoch times
     return final_test_loss, epoch_times
@@ -237,10 +245,11 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='Conv1DNet', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet
+        model_choice='ConvTransformerNet', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet
         batch_size=64,
         lr=1e-4,
         epochs=200,
+        do_visualize=True
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")
     #logger.info(f"Epoch times: {epoch_times}")
