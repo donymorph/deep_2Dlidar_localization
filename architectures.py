@@ -415,39 +415,6 @@ class RNNRegressor(nn.Module):
         return out
 
 
-###############################################################################
-# 7) Diffusion (Generic Skeleton) //// buggy and havent tested //chatgpt generated
-###############################################################################
-class SimpleDiffusionModel(nn.Module):
-    """
-    Generic placeholder for a diffusion model. Usually used for generative tasks,
-    but here's a skeleton if you want a minimal forward pass.
-
-    Real diffusion models (DDPM, etc.) involve:
-    - Forward noising process
-    - U-Net or similar architecture for denoising
-    - Specialized sampling loops, loss functions, etc.
-
-    This is a toy placeholder example for demonstration.
-    """
-    def __init__(self, input_size=1, hidden_size=64, output_size=1):
-        super().__init__()
-        self.denoiser = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
-        )
-
-    def forward(self, x, t):
-        """
-        x: noisy input (batch, input_size)
-        t: current timestep (batch, 1 or scalar)
-        For demonstration, we just apply a linear denoiser ignoring t.
-        """
-        # In real diffusion, you'd incorporate 't' (timestep) via an embedding.
-        out = self.denoiser(x)
-        return out
-
 
 ###############################################################################
 # 8) GAN (Generic Skeleton) /////// buggy havent tested //chatgpt generated
