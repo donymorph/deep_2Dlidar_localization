@@ -12,7 +12,8 @@ from architectures import (
     DeeperMLP,
     Conv1DNet,
     Conv1DLSTMNet,
-    ConvTransformerNet
+    ConvTransformerNet,
+    TransformerRegressor
 )
 from splitting import split_dataset
 from utils.utils import visualize_test_loader_static 
@@ -116,6 +117,8 @@ def train_model(
         model = Conv1DLSTMNet(input_size=input_size, output_size=3)
     elif model_choice == 'ConvTransformerNet':
         model = ConvTransformerNet(input_size=input_size, output_size=3)
+    elif model_choice == 'TransformerRegressor':
+        model = TransformerRegressor(input_size, output_size=3)
     else:
         raise ValueError(f"Unknown model_choice: {model_choice}")
 
@@ -245,7 +248,7 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='ConvTransformerNet', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet
+        model_choice='TransformerRegressor', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet, TransformerRegressor
         batch_size=64,
         lr=1e-4,
         epochs=200,

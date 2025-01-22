@@ -283,7 +283,7 @@ class PositionalEncoding(nn.Module):
 #         x = self.fc(x)  # Fully connected layers
 #         return x
 ###############################################################################
-# 5) Transformer itself, its buggy need to fix //chatgpt generated
+# 5) Transformer itself /// working
 ###############################################################################
 class TransformerRegressor(nn.Module):
     """
