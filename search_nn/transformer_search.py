@@ -172,7 +172,7 @@ def objective(trial):
     ).to(device)
 
     # Partial training with pruning
-    max_epochs = 10
+    max_epochs = 100
     val_loss = train_and_eval(model, train_loader, val_loader, device, trial, max_epochs)
     return val_loss
 ########################################
@@ -198,15 +198,15 @@ if __name__ == "__main__":
     study_name  = "transformer_search"
 
     study = optuna.create_study(
-        #study_name=study_name,
-        #storage=storage_url,
-        #load_if_exists=True,
+        study_name=study_name,
+        storage=storage_url,
+        load_if_exists=True,
         direction="minimize",
         sampler=optuna.samplers.TPESampler(),          # or whichever sampler
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=2)  # e.g. median pruner
     )
 
-    N_TRIALS = 2
+    N_TRIALS = 500
     try:
         study.optimize(objective, n_trials=N_TRIALS)
     except KeyboardInterrupt:

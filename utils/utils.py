@@ -11,7 +11,6 @@ formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-
 def calc_accuracy_percentage_xy(
     gt_array: np.ndarray,
     pred_array: np.ndarray,
@@ -28,8 +27,8 @@ def calc_accuracy_percentage_xy(
 
     correct = 0
     for i in range(N):
-        x_gt, y_gt = gt_array[i]
-        x_pd, y_pd = pred_array[i]
+        x_gt, y_gt, yaw_gt = gt_array[i]
+        x_pd, y_pd, yaw_gt = pred_array[i]
         err_x = abs(x_pd - x_gt)
         err_y = abs(y_pd - y_gt)
         if err_x <= x_thresh and err_y <= y_thresh:
@@ -68,8 +67,8 @@ def visualize_test_loader_static(model, test_loader, device='cpu', max_samples=3
                     "yaw_pd": yaw_pd
                 })
 
-                gt_list.append([x_gt, y_gt])
-                pd_list.append([x_pd, y_pd])
+                gt_list.append([x_gt, y_gt, yaw_gt])
+                pd_list.append([x_pd, y_pd, yaw_pd])
 
     # Calculate accuracy over all samples
     gt_array = np.array(gt_list)

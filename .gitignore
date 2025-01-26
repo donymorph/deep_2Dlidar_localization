@@ -24,3 +24,4 @@ Thumbs.db
 *.pth
 tensorboard_logs/
 dataset_old/
+*.db

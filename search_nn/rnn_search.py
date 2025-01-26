@@ -160,7 +160,7 @@ def objective(trial):
         dropout=dropout
     ).to(device)
     # partial training with pruning
-    max_epochs = 10
+    max_epochs = 100
     val_loss   = train_eval_model(model, train_loader, val_loader, device, trial, max_epochs)
     return val_loss
 
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         pruner=optuna.pruners.MedianPruner(n_warmup_steps=2)  # e.g. median pruner
     )
 
-    N_TRIALS = 50
+    N_TRIALS = 500
     try:
         study.optimize(objective, n_trials=N_TRIALS)
     except KeyboardInterrupt:

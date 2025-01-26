@@ -22,29 +22,30 @@ class SimpleMLP(nn.Module):
 
     def forward(self, x):
         return self.net(x)
-
-###############################################################################
-# 2) deeper MLP ///// tested works 
-###############################################################################
-class DeeperMLP(nn.Module):
+class MLP_Optuna(nn.Module):
     """
-    A deeper network example: Input -> FC(256) -> ReLU -> FC(128) -> ReLU -> FC(64) -> ReLU -> FC(6).
+    Multi-Layer Perceptron (MLP) with architecture defined by Optuna hyperparameter tuning:
+    - 3 hidden layers with sizes [256, 256, 224]
+    - LeakyReLU activation
+    - No dropout
+    - Adam optimizer and learning rate 0.000137
+    - huberloss: 0.1670 at 100 epochs
+    - batch_size: 16
     """
-    def __init__(self, input_size, hidden1=256, hidden2=128, hidden3=64, output_size=3):
-        super(DeeperMLP, self).__init__()
+    def __init__(self, input_size, output_size):
+        super(MLP_Optuna, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_size, hidden1),
-            nn.ReLU(),
-            nn.Linear(hidden1, hidden2),
-            nn.ReLU(),
-            nn.Linear(hidden2, hidden3),
-            nn.ReLU(),
-            nn.Linear(hidden3, output_size)
+            nn.Linear(input_size, 256),   # Hidden Layer 0
+            nn.LeakyReLU(),
+            nn.Linear(256, 256),         # Hidden Layer 1
+            nn.LeakyReLU(),
+            nn.Linear(256, 224),         # Hidden Layer 2
+            nn.LeakyReLU(),
+            nn.Linear(224, output_size)  # Output Layer
         )
 
     def forward(self, x):
         return self.net(x)
-
 
 ###############################################################################
 # 3) 1D CNN  ///////// tested works
@@ -89,7 +90,58 @@ class Conv1DNet(nn.Module):
         out = out.view(out.size(0), -1)  # Flatten
         out = self.fc(out)
         return out
-    
+
+class Conv1DNet_Optuna(nn.Module):
+    """
+    Optimized 1D CNN model based on the best trial results from Optuna.
+    num_conv_layers: 4
+    batch_size: 16
+    learning rate : 0.0019218642787654772
+    optimizer: Adam
+    Convolutional layers dropout: 0.0.
+    Fully connected layers dropout: 0.0.
+    """
+    def __init__(self, input_size, output_size):
+        super().__init__()
+        self.conv_layers = nn.Sequential(
+            # Layer 0
+            nn.Conv1d(1, 16, kernel_size=3, stride=2, padding=3 // 2),
+            nn.BatchNorm1d(16),
+            nn.LeakyReLU(),
+            # Layer 1
+            nn.Conv1d(16, 40, kernel_size=5, stride=2, padding=5 // 2),
+            nn.BatchNorm1d(40),
+            nn.LeakyReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Layer 2
+            nn.Conv1d(40, 56, kernel_size=5, stride=2, padding=5 // 2),
+            nn.BatchNorm1d(56),
+            nn.LeakyReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Layer 3
+            nn.Conv1d(56, 56, kernel_size=5, stride=1, padding=5 // 2),
+            nn.BatchNorm1d(56),
+            nn.LeakyReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+        )
+
+        # Compute flatten dimension using a dummy tensor
+        dummy = torch.zeros(1, 1, input_size)
+        flatten_dim = self.conv_layers(dummy).view(1, -1).size(1)
+
+        # Fully connected layers
+        self.fc_layers = nn.Sequential(
+            nn.Linear(flatten_dim, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, output_size),
+        )
+
+    def forward(self, x):
+        x = x.unsqueeze(1)  # Add channel dimension (batch, 1, input_size)
+        x = self.conv_layers(x)
+        x = x.view(x.size(0), -1)  # Flatten
+        x = self.fc_layers(x)
+        return x
 ###############################################################################
 # 4) 1D CNN with LSTM /////// tested works
 ###############################################################################
@@ -152,6 +204,81 @@ class Conv1DLSTMNet(nn.Module):
         # Fully connected layers
         out = self.fc(lstm_out)
         return out
+class CNNLSTMNet_Optuna(nn.Module):
+    """
+    Optimized CNN-LSTM network based on best trial results.
+    Combines convolutional layers for feature extraction and LSTM layers for temporal modeling.
+    batch_size: 16
+    lr: 0.0006829381720401536
+    optimizer: Adam
+    """
+    def __init__(self, input_size, output_size):
+        super().__init__()
+        
+        # CNN layers
+        self.conv_layers = nn.Sequential(
+            # Conv Layer 0
+            nn.Conv1d(1, 32, kernel_size=5, stride=1, padding=5 // 2),
+            nn.BatchNorm1d(32),
+            nn.Tanh(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Conv Layer 1
+            nn.Conv1d(32, 48, kernel_size=5, stride=2, padding=5 // 2),
+            nn.BatchNorm1d(48),
+            nn.Tanh(),
+            # Conv Layer 2
+            nn.Conv1d(48, 32, kernel_size=3, stride=2, padding=3 // 2),
+            nn.BatchNorm1d(32),
+            nn.Tanh(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Conv Layer 3
+            nn.Conv1d(32, 48, kernel_size=3, stride=1, padding=3 // 2),
+            nn.BatchNorm1d(48),
+            nn.Tanh(),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
+        
+        # Flatten dimension computation
+        dummy_input = torch.zeros(1, 1, input_size)
+        with torch.no_grad():
+            conv_out = self.conv_layers(dummy_input)  # Output shape: (batch, channels, seq_length)
+        conv_flat_dim = conv_out.size(1) * conv_out.size(2)
+        
+        # LSTM layer
+        self.lstm = nn.LSTM(
+            input_size=conv_flat_dim,
+            hidden_size=192,
+            num_layers=1,
+            batch_first=True,
+            #dropout=0.4
+        )
+        
+        # Fully connected output layer
+        self.fc = nn.Linear(192, output_size)
+
+    def forward(self, x):
+        """
+        Forward pass for the model.
+        Args:
+            x (torch.Tensor): Shape (batch, seq_len, input_size).
+        Returns:
+            torch.Tensor: Output predictions of shape (batch, output_size).
+        """
+        if x.dim() == 2:
+            x = x.unsqueeze(1)  # Add channel dimension (batch, 1, input_size)
+        b, seq, inp_size = x.shape
+
+        # Reshape for CNN (batch * seq_len, 1, input_size)
+        x = x.view(b * seq, 1, inp_size)
+        x = self.conv_layers(x)  # Apply CNN layers
+        x = x.view(b, seq, -1)   # Reshape for LSTM (batch, seq_len, conv_flat_dim)
+
+        # Pass through LSTM
+        lstm_out, (h, c) = self.lstm(x)
+        final_output = lstm_out[:, -1, :]  # Take the last time step's output
+
+        # Fully connected output layer
+        return self.fc(final_output)
 
 ###############################################################################
 # 4) 1D CNN with Transformer /// tested works a bit heavier computationally expensive
@@ -253,35 +380,97 @@ class PositionalEncoding(nn.Module):
         seq_len = x.size(1)  # Sequence length from input
         return x + self.encoding[:, :seq_len, :].to(x.device)  # Add positional encoding
     
-# class LiDARControlNet(nn.Module):
-#     def __init__(self, input_size, output_size=3):
-#         super(LiDARControlNet, self).__init__()
-#         self.conv = nn.Sequential(
-#             nn.Conv1d(in_channels=1, out_channels=16, kernel_size=5, stride=1, padding=2),
-#             nn.ReLU(),
-#             nn.Conv1d(in_channels=16, out_channels=32, kernel_size=5, stride=1, padding=2),
-#             nn.ReLU(),
-#             nn.MaxPool1d(kernel_size=2, stride=2),  # Downsample by 2
-#             nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2),
-#             nn.ReLU(),
-#             nn.MaxPool1d(kernel_size=2, stride=2)
-#         )
+class CNNTransformerNet_Optuna(nn.Module):
+    """
+    A hybrid 1D CNN + Transformer for LiDAR-based regression tasks.
+    Batch Size: 16
+    Learning Rate: 6.89e-5
+    Optimizer: Adam
+    """
+    def __init__(self, 
+                 activation_fn=nn.Tanh, 
+                 cnn_dropout=0.0, 
+                 d_model=256, 
+                 nhead=4, 
+                 num_transformer_layers=4, 
+                 transformer_dropout=0.1, 
+                 output_size=3):
+        super().__init__()
+        
+        # CNN layers
+        self.conv_layers = nn.Sequential(
+            # Conv Layer 0
+            nn.Conv1d(1, 48, kernel_size=7, stride=1, padding=7 // 2),
+            nn.BatchNorm1d(48),
+            activation_fn(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Conv Layer 1
+            nn.Conv1d(48, 48, kernel_size=3, stride=1, padding=3 // 2),
+            nn.BatchNorm1d(48),
+            activation_fn(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Conv Layer 2
+            nn.Conv1d(48, 64, kernel_size=5, stride=2, padding=5 // 2),
+            nn.BatchNorm1d(64),
+            activation_fn(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            # Conv Layer 3
+            nn.Conv1d(64, 24, kernel_size=3, stride=1, padding=3 // 2),
+            nn.BatchNorm1d(24),
+            activation_fn(),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
 
-#         self.fc = nn.Sequential(
-#             nn.Linear(64 * (input_size // 4), 128),
-#             nn.ReLU(),
-#             nn.Linear(128, 64),
-#             nn.ReLU(),
-#             nn.Linear(64, output_size)  # 3 outputs: linear_x, linear_y, angular_z
-#         )
+        # Flatten dimension
+        dummy_input = torch.zeros(1, 1, 360)  # Assuming input size = 360
+        with torch.no_grad():
+            cnn_out = self.conv_layers(dummy_input)
+        self.cnn_output_dim = cnn_out.view(1, -1).size(1)
 
-#     def forward(self, x):
-#         # Input shape: (batch, input_size)
-#         x = x.unsqueeze(1)  # Reshape to (batch, 1, input_size)
-#         x = self.conv(x)  # Convolutional layers
-#         x = x.view(x.size(0), -1)  # Flatten
-#         x = self.fc(x)  # Fully connected layers
-#         return x
+        # Linear embedding layer to map CNN output to d_model
+        self.embed_fc = nn.Linear(self.cnn_output_dim, d_model)
+
+        # Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dropout=transformer_dropout,
+            batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_transformer_layers)
+
+        # Final regression output layer
+        self.final_fc = nn.Linear(d_model, output_size)
+
+    def forward(self, x):
+        """
+        Forward pass through the CNN + Transformer architecture.
+        """
+        # x: (batch, seq_len, input_dim) or (batch, input_dim)
+        if x.dim() == 2:  # If missing sequence dimension
+            x = x.unsqueeze(1)  # Add dummy sequence dimension
+
+        batch_size, seq_len, input_dim = x.shape
+
+        # Reshape to (batch*seq_len, 1, input_dim) for CNN
+        x = x.view(batch_size * seq_len, 1, input_dim)
+        cnn_out = self.conv_layers(x)  # Output: (batch*seq_len, num_channels, reduced_seq_len)
+        cnn_out = cnn_out.view(cnn_out.size(0), -1)  # Flatten to (batch*seq_len, cnn_output_dim)
+
+        # Embed to d_model
+        embed_out = self.embed_fc(cnn_out)  # Output: (batch*seq_len, d_model)
+
+        # Reshape back to (batch, seq_len, d_model) for Transformer
+        embed_out = embed_out.view(batch_size, seq_len, -1)
+
+        # Pass through Transformer
+        transformer_out = self.transformer(embed_out)  # Output: (batch, seq_len, d_model)
+
+        # Take the last token output for regression
+        final_out = transformer_out[:, -1, :]  # Last time step
+        return self.final_fc(final_out)
+
+
 ###############################################################################
 # 5) Transformer itself /// working
 ###############################################################################
@@ -301,7 +490,7 @@ class TransformerRegressor(nn.Module):
     - output_size: e.g., 6 for linear + angular velocities
     """
     def __init__(self, n_tokens, data_dim=1, d_model=64, nhead=8,
-                 num_layers=2, output_size=6):
+                 num_layers=2, output_size=3):
         super().__init__()
         self.n_tokens = n_tokens
         self.input_size = data_dim

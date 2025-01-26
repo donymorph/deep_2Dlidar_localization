@@ -32,7 +32,7 @@ dummy_input = torch.randn(32, 360)  # Batch size of 1, input size of 360
 
 
 # Step 3: Initialize TensorBoard SummaryWriter
-writer = SummaryWriter("runs/SimpleMLP_Architecture")
+writer = SummaryWriter("tensorboard_logs/SimpleMLP_Architecture")
 
 # Step 4: Add the model graph to TensorBoard
 writer.add_graph(model, dummy_input)

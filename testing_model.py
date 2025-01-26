@@ -9,11 +9,10 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 from architectures import (
-    SimpleMLP,
-    DeeperMLP,
-    Conv1DNet,
-    Conv1DLSTMNet,
-    ConvTransformerNet
+    SimpleMLP, MLP_Optuna,
+    Conv1DNet, Conv1DNet_Optuna,
+    Conv1DLSTMNet, CNNLSTMNet_Optuna,
+    ConvTransformerNet, CNNTransformerNet_Optuna
 )
 
 #######################################
@@ -72,16 +71,16 @@ def read_scan_csv(scan_csv_path):
 # 2) Model Loading + Inference
 #######################################
 def load_model(model_path, model_choice, input_size=360, output_size=3, device='cpu'):
-    if model_choice == 'ConvTransformerNet':
-        model = ConvTransformerNet(input_size=input_size, output_size=output_size)
-    elif model_choice == 'Conv1DNet':
-        model = Conv1DNet(input_size=input_size, output_size=output_size)
-    elif model_choice == 'DeeperMLP':
-        model = DeeperMLP(input_size=input_size, hidden1=256, hidden2=128, hidden3=64, output_size=output_size)
-    elif model_choice == 'Conv1DLSTMNet':
-        model = Conv1DLSTMNet(input_size=input_size, output_size=output_size)
+    if model_choice == 'MLP_Optuna':
+        model = MLP_Optuna(input_size=input_size, output_size=output_size)
+    elif model_choice == 'Conv1DNet_Optuna':
+        model = Conv1DNet_Optuna(input_size=input_size, output_size=output_size)
+    elif model_choice == 'CNNLSTMNet_Optuna':
+        model = CNNLSTMNet_Optuna(input_size=input_size, output_size=output_size)
+    elif model_choice == 'CNNTransformerNet_Optuna':
+        model = CNNTransformerNet_Optuna(input_size=input_size, output_size=output_size)
     else:
-        model = SimpleMLP(input_size=input_size, hidden1=128, hidden2=64, output_size=output_size)
+        model = ConvTransformerNet(input_size=input_size, output_size=output_size)
 
     # Suppress the future pickle warning by explicitly specifying `weights_only=True` if you only saved weights
     # For example:
@@ -312,8 +311,8 @@ def animate_singleplot(
 def main():
     odom_csv_path = "dataset/odom_data.csv"
     scan_csv_path = "dataset/scan_data.csv"
-    model_path    = "models/ConvTransformerNet_lr0.0001_bs64_20250118_050502.pth"
-    model_choice  = "ConvTransformerNet"
+    model_path    = "models/OptimizedCNNLSTMNet_lr0.0006829381720401536_bs16_20250125_174151.pth"
+    model_choice  = "CNNLSTMNet_Optuna"
     device        = "cuda"
 
     odom_dict = read_odom_csv(odom_csv_path)
