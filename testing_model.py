@@ -78,7 +78,7 @@ def load_model(model_path, model_choice, input_size=360, output_size=3, device='
     elif model_choice == 'CNNLSTMNet_Optuna':
         model = CNNLSTMNet_Optuna(input_size=input_size, output_size=output_size)
     elif model_choice == 'CNNTransformerNet_Optuna':
-        model = CNNTransformerNet_Optuna(input_size=input_size, output_size=output_size)
+        model = CNNTransformerNet_Optuna(output_size=output_size)
     else:
         model = ConvTransformerNet(input_size=input_size, output_size=output_size)
 
@@ -311,7 +311,7 @@ def animate_singleplot(
 def main():
     odom_csv_path = "dataset/odom_data.csv"
     scan_csv_path = "dataset/scan_data.csv"
-    model_path    = "models/OptimizedCNNLSTMNet_lr0.0006829381720401536_bs16_20250125_174151.pth"
+    model_path    = "models/CNNLSTMNet_Optuna_lr0.0006829381720401536_bs16_20250127_144344.pth"
     model_choice  = "CNNLSTMNet_Optuna"
     device        = "cuda"
 
@@ -326,7 +326,7 @@ def main():
         model=model,
         device=device,
         max_frames=300,
-        save_path="images/fig.mp4"
+        #save_path="images/fig.mp4"
     )
 
 if __name__ == "__main__":

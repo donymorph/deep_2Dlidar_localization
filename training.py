@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter  # <-- For TensorBoard
 import os
-from dataset import LidarOdomDataset_Tyler
+from dataset import LidarOdomDataset_Tyler, LidarOdomDataset
 from architectures import (
     SimpleMLP, MLP_Optuna,
     Conv1DNet, Conv1DNet_Optuna,
@@ -81,7 +81,7 @@ def train_model(
     # ---------------------------
     # 1. Load dataset
     # ---------------------------
-    full_dataset = LidarOdomDataset_Tyler(odom_csv_path, scan_csv_path)
+    full_dataset = LidarOdomDataset(odom_csv_path, scan_csv_path)
 
     # 2. Inspect sample for input_size
     sample_lidar, _ = full_dataset[0]  # shape: (N_lidar_beams,)
@@ -128,7 +128,7 @@ def train_model(
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8) # after each step_size = N update /// newLR = oldRL * gamma
 
-    logger.info(f"Optimizer: AdamW, LR={lr}")
+    logger.info(f"Optimizer: Adam, LR={lr}")
     logger.info("Using HuberLoss as training criterion")
 
     train_losses = []
@@ -240,7 +240,7 @@ def train_model(
 
     # Construct model file name
     model_filename = f"models/{model_choice}_lr{lr}_bs{batch_size}_{timestamp}.pth"
-    #torch.save(model.state_dict(), model_filename)
+    torch.save(model.state_dict(), model_filename)
     logger.info(f"Model training complete. Saved to '{model_filename}'")
 
 
@@ -260,10 +260,10 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='CNNTransformerNet_Optuna', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet, TransformerRegressor
+        model_choice='Conv1DNet_Optuna', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet, TransformerRegressor
         batch_size=16,
-        lr=6.89e-5,
-        epochs=100,
+        lr=0.002,
+        epochs=200,
         do_visualize=True
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")

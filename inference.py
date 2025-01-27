@@ -12,10 +12,11 @@ import torch
 import numpy as np
 from architectures import (
     SimpleMLP,
-    DeeperMLP,
     Conv1DNet,
     Conv1DLSTMNet,
-    ConvTransformerNet
+    ConvTransformerNet,
+    CNNTransformerNet_Optuna,
+    CNNLSTMNet_Optuna
 
 )
 import os
@@ -36,7 +37,7 @@ class ScanToOdomInferenceNode(Node):
         ############################
         self.model_initialized = False
         self.model = None
-        self.model_name = 'ConvTransformerNet_lr0.0001_bs64_20250118_050502.pth' # change it according to name of model
+        self.model_name = 'CNNTransformerNet_Optuna_lr6.89e-05_bs16_20250127_131437.pth' # change it according to name of model
         # Robot 2D state: x, y, yaw
         self.x = 0.0
         self.y = 0.0
@@ -72,7 +73,7 @@ class ScanToOdomInferenceNode(Node):
         Initialize and load your trained model once we know how many LiDAR beams exist.
         """
         #self.model = SimpleMLP(input_size=input_size, output_size=6)
-        self.model = ConvTransformerNet(input_size=input_size, output_size=3)
+        self.model = CNNTransformerNet_Optuna(output_size=3)
         # Load weights
         self.model.load_state_dict(torch.load(self.model_path, map_location=torch.device('cpu'))) # cuda
         self.model.eval()

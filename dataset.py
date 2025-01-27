@@ -176,3 +176,84 @@ class LidarOdomDataset_withNoise(Dataset):
         pos_y = normalized_output[1] * self.pos_y_std + self.pos_y_mean
         orientation_z = normalized_output[2] * self.orientation_z_std + self.orientation_z_mean
         return np.array([pos_x, pos_y, orientation_z])
+    
+import logging
+import os
+import pandas as pd
+import numpy as np
+from torch.utils.data import DataLoader
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s"))
+logger.addHandler(console_handler)
+
+def test_lidar_odom_dataset():
+    """
+    Test function for LidarOdomDataset class.
+    """
+    logger.info("Starting test for LidarOdomDataset...")
+    
+    # Paths to CSV files (replace with your paths)
+    odom_csv_path = "dataset/odom_data.csv"
+    scan_csv_path = "dataset/scan_data.csv"
+
+    # Check if files exist
+    if not os.path.exists(odom_csv_path) or not os.path.exists(scan_csv_path):
+        logger.error("CSV files for testing not found. Please provide valid paths.")
+        return
+
+    try:
+        # Initialize dataset
+        dataset = LidarOdomDataset(odom_csv_path, scan_csv_path)
+        logger.info(f"Dataset successfully loaded with {len(dataset)} samples.")
+
+        # Retrieve a sample
+        lidar_input, odom_output = dataset[0]
+        logger.info(f"Sample LiDAR input shape: {lidar_input.shape}")
+        logger.info(f"Sample odometry output: {odom_output}")
+    except Exception as e:
+        logger.error(f"An error occurred during testing of LidarOdomDataset: {e}")
+    else:
+        logger.info("Test for LidarOdomDataset completed successfully.")
+
+
+def test_lidar_odom_dataset_tyler():
+    """
+    Test function for LidarOdomDataset_Tyler class.
+    """
+    logger.info("Starting test for LidarOdomDataset_Tyler...")
+    
+    # Paths to CSV files (replace with your paths)
+    odom_csv_path = "dataset/odom_data.csv"
+    scan_csv_path = "dataset/scan_data.csv"
+
+    # Check if files exist
+    if not os.path.exists(odom_csv_path) or not os.path.exists(scan_csv_path):
+        logger.error("CSV files for testing not found. Please provide valid paths.")
+        return
+
+    try:
+        # Initialize dataset
+        dataset = LidarOdomDataset_Tyler(odom_csv_path, scan_csv_path)
+        logger.info(f"Dataset successfully loaded with {len(dataset)} samples.")
+
+        # Retrieve a sample
+        lidar_input, odom_output = dataset[0]
+        logger.info(f"Sample LiDAR input shape: {lidar_input.shape}")
+        logger.info(f"Sample normalized odometry output: {odom_output}")
+
+        # Test denormalization
+        denormalized_output = dataset.denormalize_output(odom_output)
+        logger.info(f"Denormalized odometry output: {denormalized_output}")
+    except Exception as e:
+        logger.error(f"An error occurred during testing of LidarOdomDataset_Tyler: {e}")
+    else:
+        logger.info("Test for LidarOdomDataset_Tyler completed successfully.")
+
+
+if __name__ == "__main__":
+    test_lidar_odom_dataset()
+    test_lidar_odom_dataset_tyler()
