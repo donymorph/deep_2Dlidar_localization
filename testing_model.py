@@ -14,7 +14,7 @@ from architectures import (
     Conv1DLSTMNet, CNNLSTMNet_Optuna,
     ConvTransformerNet, CNNTransformerNet_Optuna
 )
-
+from utils.utils import calc_accuracy_percentage_xy
 #######################################
 # 1) CSV Reading
 #######################################
@@ -71,13 +71,13 @@ def read_scan_csv(scan_csv_path):
 # 2) Model Loading + Inference
 #######################################
 def load_model(model_path, model_choice, input_size=360, output_size=3, device='cpu'):
-    if model_choice == 'MLP_Optuna':
+    if model_choice == 'MLP':
         model = MLP_Optuna(input_size=input_size, output_size=output_size)
-    elif model_choice == 'Conv1DNet_Optuna':
+    elif model_choice == 'Conv1DNet':
         model = Conv1DNet_Optuna(input_size=input_size, output_size=output_size)
     elif model_choice == 'CNNLSTMNet_Optuna':
         model = CNNLSTMNet_Optuna(input_size=input_size, output_size=output_size)
-    elif model_choice == 'CNNTransformerNet_Optuna':
+    elif model_choice == 'CNNTransformerNet':
         model = CNNTransformerNet_Optuna(output_size=output_size)
     else:
         model = ConvTransformerNet(input_size=input_size, output_size=output_size)
@@ -99,64 +99,6 @@ def run_inference(model, scan_array, device='cpu'):
         out = model(inp)  # shape [1,3]
     pred = out.cpu().numpy()[0]  # (3,)
     return pred[0], pred[1], pred[2]
-
-#######################################
-# 3) Accuracy Computation
-#######################################
-
-def calc_accuracy_percentage(
-    gt_values: np.ndarray,
-    pred_values: np.ndarray,
-    x_thresh: float = 0.1,
-    y_thresh: float = 0.1
-) -> float:
-    """
-    Calculates the percentage of samples whose predicted (x,y) is within
-    specified thresholds of the ground truth, ignoring yaw.
-
-    :param gt_values:  Ground truth array of shape (N, 3) or (N, 2).
-                       If shape is (N,3), only x,y columns are used.
-    :param pred_values: Predicted array of shape (N, 3) or (N, 2).
-                        Similarly, only x,y columns are used.
-    :param x_thresh:   Tolerance for x (meters).
-    :param y_thresh:   Tolerance for y (meters).
-
-    :return:           Accuracy in percentage (0.0 to 100.0),
-                       counting a sample as correct if x,y errors
-                       are both within thresholds.
-    """
-    assert gt_values.shape[0] == pred_values.shape[0], \
-        "gt_values and pred_values must have the same number of rows (N)."
-
-    # If inputs have shape (N,3), slice only the first two columns (x,y).
-    # If shape is (N,2), we can just take them as is.
-    max_frame = gt_values.shape[0]
-    if max_frame == 0:
-        return 0.0
-
-    # In case your arrays are shape (N,3), slice columns 0..2 -> [0..2], but we'll specifically take 0..2?
-    # Actually we only want columns 0..1 for x,y
-    # e.g.  x_gt = gt_values[i,0], y_gt = gt_values[i,1]
-    if gt_values.shape[1] >= 2:
-        gt_xy   = gt_values[:, :2]   # shape (N,2)
-        pred_xy = pred_values[:, :2] # shape (N,2)
-    else:
-        # shape is presumably (N,2)
-        gt_xy   = gt_values
-        pred_xy = pred_values
-
-    correct_count = 0
-    for i in range(max_frame):
-        x_gt, y_gt = gt_xy[i]
-        x_pd, y_pd = pred_xy[i]
-        err_x = abs(x_pd - x_gt)
-        err_y = abs(y_pd - y_gt)
-
-        if (err_x <= x_thresh) and (err_y <= y_thresh):
-            correct_count += 1
-
-    accuracy = 100.0 * correct_count / max_frame
-    return accuracy, max_frame, x_thresh, y_thresh
 
 #######################################
 # 4) Single-plot Animation
@@ -205,13 +147,13 @@ def animate_singleplot(
             "scan": d["scan"]
         })
         # For accuracy arrays
-        gt_list.append([d["x_gt"], d["y_gt"]])
-        pred_list.append([x_pred, y_pred])
+        gt_list.append([d["x_gt"], d["y_gt"], d["yaw_gt"] ])
+        pred_list.append([x_pred, y_pred, yaw_pred])
 
     # Convert to NumPy for accuracy
     gt_values = np.array(gt_list)    # shape (N,3)
     pred_values = np.array(pred_list)
-    acc_perc, _ , x_thresh, y_thresh = calc_accuracy_percentage(gt_values, pred_values, 0.1, 0.1)
+    acc_perc, x_thresh, y_thresh = calc_accuracy_percentage_xy(gt_values, pred_values, 0.1, 0.1)
     print(f"Overall Accuracy: {acc_perc:.2f}%")
 
     # keep a running path for GT and Pred
@@ -222,7 +164,7 @@ def animate_singleplot(
 
     gt_line, = ax.plot([], [], 'b-', label='Ground Truth')
     pd_line, = ax.plot([], [], 'r-', label='Predicted')
-    scan_scatter = ax.scatter([], [], c='g', s=5, alpha=0.7)
+    scan_scatter = ax.scatter([], [], c='r', s=1, alpha=0.7)
 
     # Add text to show overall accuracy
     # We'll place it in top-left corner
@@ -274,16 +216,28 @@ def animate_singleplot(
         pd_line.set_data(pd_x_vals, pd_y_vals)
 
         # Compute LiDAR points in global frame (simple assumption: angles in [-pi, pi])
-        # scan = r["scan"]
-        # N = len(scan)
-        # angles = np.linspace(-math.pi,math.pi, N, endpoint=False) + math.pi
+        # ranges = r["scan"]
+        # N = len(ranges)
+        # # Create angles covering the full circle; adjust as needed
+        # angles = np.linspace(math.pi, -math.pi, N, endpoint=False)
+        # #angles = np.rad2deg(angles)
+        
+        # #global_angles = angles - r["yaw_gt"]
         # x0, y0 = r["x_gt"], r["y_gt"]
-        # x_loc = scan * np.cos(angles)
-        # y_loc = scan * np.sin(angles)
+        # x_loc = ranges * np.cos(angles)
+        # y_loc = ranges * np.sin(angles)
 
         # x_glob = x0 + x_loc
         # y_glob = y0 + y_loc
         # scan_pts = np.column_stack((x_glob, y_glob))
+        # #Use ground truth robot pose
+        # pose = np.array([r["x_gt"], r["y_gt"], r["yaw_gt"]])
+        # pose2 = np.array([r["x_pred"], r["y_pred"], r["yaw_pred"]])
+        # # Convert polar coordinates to local Cartesian coordinates.
+        # local_scan = pol2cart(angles, ranges)
+        
+        # # Transform local scan points to global frame.
+        # global_scan = localToGlobal(pose, local_scan)
         # scan_scatter.set_offsets(scan_pts)
 
         update_limits()

@@ -1,26 +1,10 @@
-import random
 import torch
-import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from architectures import (
-    MLP_Optuna,
-    Conv1DNet_Optuna,
-    CNNLSTMNet_Optuna,
-    CNNTransformerNet_Optuna,
-)
 from testing_model import read_odom_csv, read_scan_csv, run_inference, load_model
-from utils.utils import calc_accuracy_percentage_xy
-#######################################
-# Logging Setup
-#######################################
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-console_handler = logging.StreamHandler()
-formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+from utils.utils import calc_accuracy_percentage_xy, setup_logger
 
+logger = setup_logger()
 #######################################
 # Accuracy and Visualization
 #######################################
@@ -94,13 +78,13 @@ def plot_predictions(results):
         # Plot ground truth points
         plt.scatter(
             gt_array[:, 0], gt_array[:, 1],
-            color='blue', label='Ground Truth', alpha=0.6, s=10
+            color='blue', label='Ground Truth', alpha=0.6, s=50
         )
 
         # Plot predicted points
         plt.scatter(
             pred_array[:, 0], pred_array[:, 1],
-            color='red', label='Predicted', alpha=0.6, s=10
+            color='red', label='Predicted', alpha=0.6, s=50
         )
 
         # Connect ground truth and predictions with lines
@@ -135,10 +119,10 @@ if __name__ == "__main__":
 
     # Define models and their saved paths
     model_choices = [
-        ("MLP_Optuna", "models/MLP_Optuna_lr0.000137_bs16_20250127_142609.pth"),
-        ("Conv1DNet_Optuna", "models/Conv1DNet_Optuna_lr0.002_bs16_20250127_152439.pth"),
+        ("MLP", "models/MLP_Optuna_lr0.000137_bs16_20250127_142609.pth"),
+        ("Conv1DNet", "models/Conv1DNet_Optuna_lr0.002_bs16_20250127_152439.pth"),
         ("CNNLSTMNet_Optuna", "models/CNNLSTMNet_Optuna_lr0.0006829381720401536_bs16_20250127_144344.pth"),
-        ("CNNTransformerNet_Optuna", "models/CNNTransformerNet_Optuna_lr6.89e-05_bs16_20250127_131437.pth"),
+        ("CNNTransformerNet", "models/CNNTransformerNet_Optuna_lr6.89e-05_bs16_20250127_131437.pth"),
     ]
 
     models = []
@@ -152,4 +136,4 @@ if __name__ == "__main__":
         model_names.append(model_name)
 
     # Evaluate and plot
-    evaluate_models(models, model_names, scan_data, odom_data, device=device, sample_fraction = 0.1)
+    evaluate_models(models, model_names, scan_data, odom_data, device=device, sample_fraction = 0.012)

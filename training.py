@@ -1,41 +1,131 @@
-# training.py
 import time
-import logging
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter  # <-- For TensorBoard
 import os
-from dataset import LidarOdomDataset_Tyler, LidarOdomDataset
+import numpy as np
+from dataset import LidarOdomDataset, LidarOdomDataset_Tyler, LidarOdomDataset_withNoise
 from architectures import (
     SimpleMLP, MLP_Optuna,
     Conv1DNet, Conv1DNet_Optuna,
     Conv1DLSTMNet, CNNLSTMNet_Optuna,
     ConvTransformerNet, CNNTransformerNet_Optuna
 )
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import StepLR
 from splitting import split_dataset_tyler
-from utils.utils import visualize_test_loader_static, calc_accuracy_percentage_xy
-import numpy as np
+from utils.utils import visualize_test_loader_static, calc_accuracy_percentage_xy, setup_logger, get_device, setup_tensorboard
+
+logger = setup_logger()
+device = get_device()
 # ---------------------------
-# Setup Python logging
+# Load Dataset and Split
 # ---------------------------
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-# You can configure handlers (console, file) as needed:
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-# Optional: add format
-formatter = logging.Formatter('[%(asctime)s] %(levelname)s - %(name)s - %(message)s')
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+def load_and_split_data(odom_csv, scan_csv, train_ratio, val_ratio, test_ratio, random_seed):
+    dataset_folder = "dataset"
+    odom_csv_path = os.path.join(dataset_folder, odom_csv)
+    scan_csv_path = os.path.join(dataset_folder, scan_csv)
+
+    if not os.path.exists(odom_csv_path):
+        raise FileNotFoundError(f"Odometry data file '{odom_csv_path}' not found in '{dataset_folder}'.")
+    if not os.path.exists(scan_csv_path):
+        raise FileNotFoundError(f"LaserScan data file '{scan_csv_path}' not found in '{dataset_folder}'.")
+
+    full_dataset = LidarOdomDataset_Tyler(odom_csv_path, scan_csv_path)
+    sample_lidar, _ = full_dataset[0]  # Get a sample to determine input size
+    input_size = len(sample_lidar)
+    
+    train_subset, val_subset, test_subset = split_dataset_tyler(
+        full_dataset,
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+        test_ratio=test_ratio,
+        random_seed=random_seed
+    )
+    
+    return train_subset, val_subset, test_subset, input_size
 
 # ---------------------------
-# Check GPU
+# Initialize Model
 # ---------------------------
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-logger.info(f"Using device: {device}")
+def initialize_model(model_choice, input_size):
+    model_dict = {
+        'SimpleMLP': SimpleMLP,
+        'MLP_Optuna': MLP_Optuna,
+        'Conv1DNet_Optuna': Conv1DNet_Optuna,
+        'CNNLSTMNet_Optuna': CNNLSTMNet_Optuna,
+        'CNNTransformerNet_Optuna': CNNTransformerNet_Optuna,
+        'ConvTransformerNet': ConvTransformerNet,
+    }
+    
+    if model_choice not in model_dict:
+        raise ValueError(f"Unknown model_choice: {model_choice}")
+    
+    model = model_dict[model_choice](input_size=input_size, output_size=3)
+    return model
 
+# ---------------------------
+# Training Loop
+# ---------------------------
+def train_epoch(model, train_loader, optimizer, criterion, device):
+    model.train()
+    total_train_loss = 0.0
+    for lidar_batch, odom_batch in train_loader:
+        lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
+        optimizer.zero_grad()
+        preds = model(lidar_batch)
+        loss = criterion(preds, odom_batch)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        total_train_loss += loss.item()
+    return total_train_loss / len(train_loader)
+
+def validate_epoch(model, val_loader, criterion, device):
+    model.eval()
+    total_val_loss = 0.0
+    gt_list, pd_list = [], []
+    with torch.no_grad():
+        for lidar_batch, odom_batch in val_loader:
+            lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
+            preds = model(lidar_batch)
+            val_loss = criterion(preds, odom_batch)
+            total_val_loss += val_loss.item()
+            gt_list.extend(odom_batch.cpu().numpy())
+            pd_list.extend(preds.cpu().numpy())
+    avg_val_loss = total_val_loss / len(val_loader)
+    acc_perc, _, _ = calc_accuracy_percentage_xy(np.array(gt_list), np.array(pd_list))
+    return avg_val_loss, acc_perc
+# ---------------------------
+# Evaluate Test Data
+# ---------------------------
+def evaluate_test(model, test_loader, criterion, device):
+    total_test_loss = 0.0
+    total_samples = 0
+    model.eval()
+    
+    with torch.no_grad():
+        for lidar_batch, odom_batch in test_loader:
+            lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
+            preds = model(lidar_batch)
+            loss_test = criterion(preds, odom_batch)
+            batch_sz = lidar_batch.size(0)
+            total_test_loss += loss_test.item() * batch_sz
+            total_samples += batch_sz
+    return total_test_loss / total_samples if total_samples > 0 else 0.0
+
+# ---------------------------
+# Save the Model
+# ---------------------------
+def save_model(model, model_choice, lr, batch_size):
+    os.makedirs("models", exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    model_filename = f"models/{model_choice}_lr{lr}_bs{batch_size}_{timestamp}.pth"
+    torch.save(model.state_dict(), model_filename)
+    logger.info(f"Model training complete. Saved to '{model_filename}'")
+    
+# ---------------------------
+# Train Model
+# ---------------------------
 def train_model(
     odom_csv='odom_data.csv',
     scan_csv='scan_data.csv',
@@ -46,144 +136,44 @@ def train_model(
     train_ratio=0.7,
     val_ratio=0.2,
     test_ratio=0.1,
-    random_seed=42,
-    log_dir=None, # TensorBoard logdir
+    random_seed=41,
+    log_dir=None,
     do_visualize=False
 ):
-    """
-    Train a LiDAR->Velocity model. Returns final test loss, epoch_times.
-    Also logs data to TensorBoard (SummaryWriter) and Python logger.
-    """
-    # ---------------------------
-    # TensorBoard Setup
-    # ---------------------------
-    if log_dir is None:  # Dynamically format the log_dir
-        log_dir = f"tensorboard_logs/{model_choice}_lr{lr}_bs{batch_size}"
-    writer = SummaryWriter(log_dir=log_dir)
-    logger.info(f"TensorBoard writer created at {log_dir}")
-    # ---------------------------
-    # Ensure dataset folder exists and retrieve files
-    # ---------------------------
-    dataset_folder = "dataset"
-    if not os.path.exists(dataset_folder):
-        raise FileNotFoundError(f"The dataset folder '{dataset_folder}' does not exist. Please create it and add the dataset files.")
+    
+    writer = setup_tensorboard(log_dir, model_choice, lr, batch_size)
 
-    # Set paths to dataset files inside the dataset folder
-    odom_csv_path = os.path.join(dataset_folder, odom_csv)
-    scan_csv_path = os.path.join(dataset_folder, scan_csv)
-
-    # Ensure the dataset files exist
-    if not os.path.exists(odom_csv_path):
-        raise FileNotFoundError(f"Odometry data file '{odom_csv_path}' not found in '{dataset_folder}'.")
-    if not os.path.exists(scan_csv_path):
-        raise FileNotFoundError(f"LaserScan data file '{scan_csv_path}' not found in '{dataset_folder}'.")
-
-    # ---------------------------
-    # 1. Load dataset
-    # ---------------------------
-    full_dataset = LidarOdomDataset(odom_csv_path, scan_csv_path)
-
-    # 2. Inspect sample for input_size
-    sample_lidar, _ = full_dataset[0]  # shape: (N_lidar_beams,)
-    input_size = len(sample_lidar)     # e.g., 360
-    logger.info(f"Detected input_size={input_size} from sample data")
-
-    # 3. Split dataset
-    train_subset, val_subset, test_subset = split_dataset_tyler(
-        full_dataset,
-        train_ratio=train_ratio,
-        val_ratio=val_ratio,
-        test_ratio=test_ratio,
-        random_seed=random_seed
+    # Load and split data
+    train_subset, val_subset, test_subset, input_size = load_and_split_data(
+        odom_csv, scan_csv, train_ratio, val_ratio, test_ratio, random_seed
     )
-    logger.info(
-        f"Dataset split into: Train={len(train_subset)}, Val={len(val_subset)}, Test={len(test_subset)}"
-    )
-
-    # 4. DataLoaders
+    
+    # DataLoaders
     train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_subset, batch_size=batch_size, shuffle=False)
 
-    # 5. Model selection
-    logger.info(f"Initializing model: {model_choice}")
-    if model_choice == 'MLP_Optuna':
-        model = MLP_Optuna(input_size=input_size, output_size=3)
-    elif model_choice == 'Conv1DNet_Optuna':
-        model = Conv1DNet_Optuna(input_size=input_size, output_size=3)
-    elif model_choice == 'CNNLSTMNet_Optuna':
-        model = CNNLSTMNet_Optuna(input_size=input_size, output_size=3)
-    elif model_choice == 'CNNTransformerNet_Optuna':
-        model = CNNTransformerNet_Optuna(output_size=3)
-    elif model_choice == 'ConvTransformerNet':
-        model = ConvTransformerNet(input_size=input_size, output_size=3)
-    else:
-        raise ValueError(f"Unknown model_choice: {model_choice}")
-
+    # Model initialization
+    model = initialize_model(model_choice, input_size)
     model.to(device)
-    logger.info(f"Model {model_choice} moved to {device}")
-
-    # 6. Define loss & optimizer & scheduler
+    
+    # Loss, optimizer, scheduler
     criterion = nn.L1Loss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8) # after each step_size = N update /// newLR = oldRL * gamma
-
-    logger.info(f"Optimizer: Adam, LR={lr}")
-    logger.info("Using HuberLoss as training criterion")
-
-    train_losses = []
-    val_losses = []
-    epoch_times = []
-
-    # ---------------------------
+    scheduler = StepLR(optimizer, step_size=50, gamma=0.8)
+    
     # Training loop
-    # ---------------------------
+    train_losses, val_losses, epoch_times = [], [], []
     for epoch in range(epochs):
         start_time = time.time()
-
-        # Train phase
-        model.train()
-        total_train_loss = 0.0
-        for lidar_batch, odom_batch in train_loader:
-            lidar_batch = lidar_batch.to(device)
-            odom_batch = odom_batch.to(device)
-
-            optimizer.zero_grad()
-            preds = model(lidar_batch)
-            loss = criterion(preds, odom_batch)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-
-            total_train_loss += loss.item()
-
-        avg_train_loss = total_train_loss / len(train_loader)
-
-        # Validation phase
-        model.eval()
-        total_val_loss = 0.0
-        gt_list = []
-        pd_list = []
-        with torch.no_grad():
-            for lidar_batch, odom_batch in val_loader:
-                lidar_batch = lidar_batch.to(device)
-                odom_batch = odom_batch.to(device)
-                preds = model(lidar_batch)
-                val_loss = criterion(preds, odom_batch)
-                total_val_loss += val_loss.item()
-                
-                gt_list.extend(odom_batch.cpu().numpy())
-                pd_list.extend(preds.cpu().numpy())
-
-        avg_val_loss = total_val_loss / len(val_loader)
-
-        acc_perc, _, _ = calc_accuracy_percentage_xy(np.array(gt_list), np.array(pd_list))
-
         
-        train_losses.append(avg_train_loss)
-        val_losses.append(avg_val_loss)
+        # Training
+        avg_train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
 
-        # Step the scheduler
+        # Validation
+        avg_val_loss, acc_perc = validate_epoch(model, val_loader, criterion, device)
+
+        # Scheduler step
         scheduler.step()
 
         # Time measurement
@@ -191,13 +181,9 @@ def train_model(
         epoch_times.append(epoch_time)
 
         # TensorBoard logging
-        current_lr = optimizer.param_groups[0]['lr']
         writer.add_scalar("Metrics/Accuracy", acc_perc, epoch)
         writer.add_scalar("Metrics/Train Loss", avg_train_loss, epoch)
         writer.add_scalar("Metrics/Val Loss", avg_val_loss, epoch)
-
-        writer.add_scalar("Learning/Current LR", current_lr, epoch)
-
         writer.add_scalar("Time/Epoch Time", epoch_time, epoch)
 
         # Logging
@@ -206,68 +192,39 @@ def train_model(
             f"TrainLoss={avg_train_loss:.4f}, "
             f"ValLoss={avg_val_loss:.4f}, "
             f"Accuracy={acc_perc:.2f}%, "
-            f"LR={current_lr:.6g}, "
             f"Time={epoch_time:.2f}s"
         )
 
-    # ---------------------------
     # Final test evaluation
-    # ---------------------------
-    total_test_loss = 0.0
-    total_samples = 0
-    model.eval()
-    with torch.no_grad():
-        for lidar_batch, odom_batch in test_loader:
-            lidar_batch = lidar_batch.to(device)
-            odom_batch = odom_batch.to(device)
-            preds = model(lidar_batch)
-            loss_test = criterion(preds, odom_batch)
-
-            batch_sz = lidar_batch.size(0)
-            total_test_loss += loss_test.item() * batch_sz
-            total_samples += batch_sz
-
-    final_test_loss = total_test_loss / total_samples if total_samples > 0 else 0.0
+    final_test_loss = evaluate_test(model, test_loader, criterion, device)
     logger.info(f"Final Test Loss: {final_test_loss:.4f}")
 
-    # ---------------------------
-    # Save model with descriptive name
-    # ---------------------------
-    os.makedirs("models", exist_ok=True)
+    # Save the model
+    save_model(model, model_choice, lr, batch_size)
 
-    # Get current timestamp
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-
-    # Construct model file name
-    model_filename = f"models/{model_choice}_lr{lr}_bs{batch_size}_{timestamp}.pth"
-    torch.save(model.state_dict(), model_filename)
-    logger.info(f"Model training complete. Saved to '{model_filename}'")
-
+    # Visualize if required
+    if do_visualize:
+        visualize_test_loader_static(model, test_loader, device=device, max_samples=len(test_loader.dataset))
 
     # Close TensorBoard writer
     writer.close()
-    # If do_visualize => plot using the test_loader
-    if do_visualize:
-        logger.info("Starting Matplotlib animation on test_loader data...")
-        visualize_test_loader_static(model, test_loader, device=device, max_samples=total_samples) 
-        logger.info("Animation done.")
 
-
-    # Return final test loss + epoch times
     return final_test_loss, epoch_times
 
+# ---------------------------
+# Main Function
+# ---------------------------
 def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='Conv1DNet_Optuna', # SimpleMLP, DeeperMLP, Conv1DNet, Conv1DLSTMNet, ConvTransformerNet, TransformerRegressor
+        model_choice='CNNTransformerNet_Optuna',  # Select model
         batch_size=16,
-        lr=0.002,
+        lr=6.89e-5,
         epochs=200,
         do_visualize=True
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")
-    #logger.info(f"Epoch times: {epoch_times}")
 
 if __name__ == "__main__":
     main()

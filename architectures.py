@@ -388,6 +388,7 @@ class CNNTransformerNet_Optuna(nn.Module):
     Optimizer: Adam
     """
     def __init__(self, 
+                 input_size=360,
                  activation_fn=nn.Tanh, 
                  cnn_dropout=0.0, 
                  d_model=256, 
