@@ -30,7 +30,7 @@ def load_and_split_data(odom_csv, scan_csv, train_ratio, val_ratio, test_ratio, 
     if not os.path.exists(scan_csv_path):
         raise FileNotFoundError(f"LaserScan data file '{scan_csv_path}' not found in '{dataset_folder}'.")
 
-    full_dataset = LidarOdomDataset_Tyler(odom_csv_path, scan_csv_path)
+    full_dataset = LidarOdomDataset(odom_csv_path, scan_csv_path)
     sample_lidar, _ = full_dataset[0]  # Get a sample to determine input size
     input_size = len(sample_lidar)
     
