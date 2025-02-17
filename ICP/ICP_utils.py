@@ -55,22 +55,43 @@ class Lidar():
 
 
 def v2t(pose):
-    # from vector to transform
-    tx = pose[0]
-    ty = pose[1]
-    theta = pose[2]
-    transform = np.array([[np.cos(theta), -np.sin(theta), tx],
-                          [np.sin(theta), np.cos(theta), ty],
-                          [0, 0, 1]])
+    """
+    Converts a 2D pose [x, y, theta] into a homogeneous transformation matrix (3x3).
+    
+    Args:
+        pose (array-like): [x, y, theta] where
+            x, y: Translation components
+            theta: Rotation angle (in radians)
+    
+    Returns:
+        numpy.ndarray: 3x3 homogeneous transformation matrix.
+    """
+    x, y, theta = pose
+    cos_theta = np.cos(theta)
+    sin_theta = np.sin(theta)
+
+    transform = np.array([
+        [cos_theta, -sin_theta, x],
+        [sin_theta,  cos_theta, y],
+        [0,         0,         1]
+    ])
 
     return transform
 
 def t2v(T):
-    # from transform to vector
-    v = np.zeros((3,))
-    v[:2] = T[:2,2]
-    v[2] = np.arctan2(T[1,0], T[0,0])
-    return v
+    """
+    Converts a homogeneous transformation matrix (3x3) back to a 2D pose [x, y, theta].
+    
+    Args:
+        T (numpy.ndarray): 3x3 transformation matrix
+    
+    Returns:
+        numpy.ndarray: [x, y, theta] pose
+    """
+    x, y = T[:2, 2]
+    theta = np.arctan2(T[1, 0], T[0, 0])  # More robust than atan(y/x)
+
+    return np.array([x, y, theta])
 
 def localToGlobal(pose, scan):
     scanT = np.copy(scan.T)

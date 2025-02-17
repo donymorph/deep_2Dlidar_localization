@@ -10,7 +10,7 @@ from std_msgs.msg import Header
 
 import torch
 import numpy as np
-from architectures import (
+from architectures.architectures import (
     SimpleMLP,
     Conv1DNet,
     Conv1DLSTMNet,

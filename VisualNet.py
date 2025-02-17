@@ -1,5 +1,5 @@
 import torch
-from architectures import SimpleMLP, Conv1DNet, ConvTransformerNet, Conv1DLSTMNet
+from architectures.architectures import SimpleMLP, Conv1DNet, ConvTransformerNet, Conv1DLSTMNet
 from torch.utils.tensorboard import SummaryWriter
 from torchviz import make_dot
 

@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from architectures import (
+from architectures.architectures import (
     SimpleMLP, MLP_Optuna,
     Conv1DNet, Conv1DNet_Optuna,
     Conv1DLSTMNet, CNNLSTMNet_Optuna,
@@ -215,7 +215,7 @@ def animate_singleplot(
         gt_line.set_data(gt_x_vals, gt_y_vals)
         pd_line.set_data(pd_x_vals, pd_y_vals)
 
-        # Compute LiDAR points in global frame (simple assumption: angles in [-pi, pi])
+        #Compute LiDAR points in global frame (simple assumption: angles in [-pi, pi])
         # ranges = r["scan"]
         # N = len(ranges)
         # # Create angles covering the full circle; adjust as needed
@@ -230,7 +230,7 @@ def animate_singleplot(
         # x_glob = x0 + x_loc
         # y_glob = y0 + y_loc
         # scan_pts = np.column_stack((x_glob, y_glob))
-        # #Use ground truth robot pose
+        #Use ground truth robot pose
         # pose = np.array([r["x_gt"], r["y_gt"], r["yaw_gt"]])
         # pose2 = np.array([r["x_pred"], r["y_pred"], r["yaw_pred"]])
         # # Convert polar coordinates to local Cartesian coordinates.
@@ -238,7 +238,7 @@ def animate_singleplot(
         
         # # Transform local scan points to global frame.
         # global_scan = localToGlobal(pose, local_scan)
-        # scan_scatter.set_offsets(scan_pts)
+        #scan_scatter.set_offsets(scan_pts)
 
         update_limits()
         return gt_line, pd_line, scan_scatter

@@ -149,7 +149,7 @@ class Conv1DLSTMNet(nn.Module):
     """
     Combines Conv1D and LSTM layers for processing 1D LiDAR scans and predicting robot position.
     """
-    def __init__(self, input_size=360, output_size=3, hidden_size=64, lstm_layers=2):
+    def __init__(self, input_size=360, output_size=3, hidden_size=64, lstm_layers=1):
         super(Conv1DLSTMNet, self).__init__()
         # Convolutional layers
         self.conv = nn.Sequential(
@@ -177,7 +177,7 @@ class Conv1DLSTMNet(nn.Module):
 
         # Fully connected layers
         self.fc = nn.Sequential(
-            nn.Dropout(0.5),
+            #nn.Dropout(0.5),
             nn.Linear(hidden_size, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
@@ -220,21 +220,25 @@ class CNNLSTMNet_Optuna(nn.Module):
             # Conv Layer 0
             nn.Conv1d(1, 32, kernel_size=5, stride=1, padding=5 // 2),
             nn.BatchNorm1d(32),
-            nn.Tanh(),
+            nn.ReLU(),
+            nn.Dropout(0.1),
             nn.MaxPool1d(kernel_size=2, stride=2),
             # Conv Layer 1
             nn.Conv1d(32, 48, kernel_size=5, stride=2, padding=5 // 2),
             nn.BatchNorm1d(48),
-            nn.Tanh(),
+            nn.ReLU(),
+            #nn.Dropout(0.1),
             # Conv Layer 2
             nn.Conv1d(48, 32, kernel_size=3, stride=2, padding=3 // 2),
             nn.BatchNorm1d(32),
-            nn.Tanh(),
+            nn.ReLU(),
+            #nn.Dropout(0.2),
             nn.MaxPool1d(kernel_size=2, stride=2),
             # Conv Layer 3
             nn.Conv1d(32, 48, kernel_size=3, stride=1, padding=3 // 2),
             nn.BatchNorm1d(48),
-            nn.Tanh(),
+            nn.ReLU(),
+            #nn.Dropout(0.2),
             nn.MaxPool1d(kernel_size=2, stride=2)
         )
         
@@ -250,7 +254,7 @@ class CNNLSTMNet_Optuna(nn.Module):
             hidden_size=192,
             num_layers=1,
             batch_first=True,
-            #dropout=0.4
+            #dropout=0.5
         )
         
         # Fully connected output layer

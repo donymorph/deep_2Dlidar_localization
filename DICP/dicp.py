@@ -2,9 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
-# (Re)Use the vec2mat, DifferentiableICP, and LocalizationNet definitions
-# from your architecture code.
 
 def vec2mat(trans):
     """
@@ -35,14 +34,12 @@ class DifferentiableICP(nn.Module):
     it iteratively refines the alignment between a source and target 2D point cloud
     by computing small delta updates and composing them via homogeneous matrices.
     """
-    def __init__(self, iterations=5):
+    def __init__(self, iterations=5, eps=1e-6):
         super(DifferentiableICP, self).__init__()
         self.iterations = iterations
+        self.eps = eps
 
     def forward(self, source, target, init_transformation):
-        source = source.float()
-        target = target.float()
-        init_transformation = init_transformation.float()
         # source and target: (batch, N, 2)
         # init_transformation: (batch, 3) where each row is [theta, tx, ty]
         batch_size = init_transformation.shape[0]
@@ -65,7 +62,7 @@ class DifferentiableICP(nn.Module):
             dists = torch.sum(diff ** 2, dim=-1)  # (batch, N, N)
             
             # Soft assignment: each source point gets a soft correspondence over target points.
-            weights = nn.functional.softmax(-dists, dim=-1)  # (batch, N, N)
+            weights = F.softmax(-dists, dim=-1)  # (batch, N, N)
             
             # Compute soft correspondences for each source point.
             target_corr = torch.bmm(weights, target)  # (batch, N, 2)
@@ -80,6 +77,9 @@ class DifferentiableICP(nn.Module):
             
             # Compute cross-covariance matrix H for each batch element.
             H = torch.bmm(source_centered.transpose(1, 2), target_centered)  # (batch, 2, 2)
+            # Add a small epsilon * I for stability.
+            I = self.eps * torch.eye(2, device=H.device, dtype=H.dtype).unsqueeze(0)
+            H = H + I
             
             # Perform SVD on H.
             U, S, Vh = torch.linalg.svd(H, full_matrices=False)
@@ -87,7 +87,7 @@ class DifferentiableICP(nn.Module):
             R_delta = torch.bmm(V, U.transpose(1, 2))  # (batch, 2, 2)
             
             # Compute translation delta.
-            t_delta = centroid_target.transpose(1, 2) - torch.bmm(R_delta, centroid_source.transpose(1, 2))  # (batch, 2, 1)
+            t_delta = centroid_target.transpose(1,2) - torch.bmm(R_delta, centroid_source.transpose(1,2))  # (batch, 2, 1)
             
             # Convert delta transformation to vector form: [delta_theta, delta_tx, delta_ty]
             delta_theta = torch.atan2(R_delta[:, 1, 0], R_delta[:, 0, 0])  # (batch,)
@@ -104,7 +104,7 @@ class DifferentiableICP(nn.Module):
             # Update transformed source points.
             source_transformed_h = torch.bmm(source_h, T.transpose(1, 2))
             source_transformed = source_transformed_h[:, :, :2]
-        
+            
         # Extract refined transformation from T.
         refined_theta = torch.atan2(T[:, 1, 0], T[:, 0, 0])
         refined_tx = T[:, 0, 2]

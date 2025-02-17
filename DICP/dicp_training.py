@@ -3,14 +3,13 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import os
+import sys
 import numpy as np
-from dataset import LidarOdomDataset, LidarOdomDataset_Tyler, LidarOdomDataset_withNoise, LidarOdomPairDataset
-from architectures import (
-    SimpleMLP, MLP_Optuna,
-    Conv1DNet, Conv1DNet_Optuna,
-    Conv1DLSTMNet, CNNLSTMNet_Optuna,
-    ConvTransformerNet, CNNTransformerNet_Optuna, 
-)
+# Add the parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from dicp_dataset import LidarOdomPairDataset
+
 from DICP.dicp import LocalizationNet
 from torch.optim.lr_scheduler import StepLR
 from splitting import split_dataset_tyler
@@ -55,12 +54,6 @@ def load_and_split_data(odom_csv, scan_csv, train_ratio, val_ratio, test_ratio, 
 # ---------------------------
 def initialize_model(model_choice, input_size):
     model_dict = {
-        'SimpleMLP': SimpleMLP,
-        'MLP_Optuna': MLP_Optuna,
-        'Conv1DNet_Optuna': Conv1DNet_Optuna,
-        'CNNLSTMNet_Optuna': CNNLSTMNet_Optuna,
-        'CNNTransformerNet_Optuna': CNNTransformerNet_Optuna,
-        'ConvTransformerNet': ConvTransformerNet,
         'LocalizationNet': LocalizationNet  # Our new architecture
     }
     
@@ -92,7 +85,7 @@ def train_epoch(model, train_loader, optimizer, criterion, device, use_icp=False
             source_points = source_points.to(device)
             target_points = target_points.to(device)
             preds = model(lidar_batch, source_points, target_points)
-            preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
+            #preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
         else:
             lidar_batch, odom_batch = data
             lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
@@ -118,7 +111,7 @@ def validate_epoch(model, val_loader, criterion, device, use_icp=False):
                 source_points = source_points.to(device)
                 target_points = target_points.to(device)
                 preds = model(lidar_batch, source_points, target_points)
-                preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
+                #preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
             else:
                 lidar_batch, odom_batch = data
                 lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
@@ -145,7 +138,7 @@ def evaluate_test(model, test_loader, criterion, device, use_icp=False):
                 source_points = source_points.to(device)
                 target_points = target_points.to(device)
                 preds = model(lidar_batch, source_points, target_points)
-                preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
+                #preds = torch.stack([preds[:, 1], preds[:, 2], preds[:, 0]], dim=1)
             else:
                 lidar_batch, odom_batch = data
                 lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
@@ -230,7 +223,7 @@ def train_model(
     if do_visualize:
         visualize_test_loader_static_dicp(model, test_loader, device=device, max_samples=200)#len(test_loader.dataset)
     
-    writer.close()
+    #writer.close()
     return final_test_loss, epoch_times
 
 # ---------------------------
@@ -243,7 +236,7 @@ def main():
         model_choice='LocalizationNet',  # Use the new ICP-based model
         batch_size=16,
         lr=0.001,
-        epochs=2,
+        epochs=50,
         do_visualize=True
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")

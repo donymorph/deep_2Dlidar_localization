@@ -1,7 +1,10 @@
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
+# Add the parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from ICP.ICP_utils import Lidar, pol2cart, v2t, t2v, localToGlobal
 from ICP.ICP_variants import (
     point_to_point_icp, point_to_plane_icp, 
@@ -98,8 +101,8 @@ def update(frame_idx):
 
     # Apply ICP
         # Compute normals for point-to-plane ICP
-    normals = compute_normals(scan_before_global)
-    T = point_to_plane_icp(scan_current_global, scan_before_global, normals)
+    #normals = compute_normals(scan_before_global)
+    T = point_to_point_icp(scan_current_global, scan_before_global)
 
     # Update pose
     pose_T = v2t(pose)
