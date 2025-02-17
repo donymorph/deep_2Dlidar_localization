@@ -26,6 +26,7 @@ class LidarOdomDataset(Dataset):
         # Store the entire merged dataframe
         self.data = merged_df
 
+
     def __len__(self):
         return len(self.data)
 
@@ -54,6 +55,15 @@ class LidarOdomDataset(Dataset):
 
         return lidar_input, odom_output
 
+    def save_odom_data(self, out_csv_filepath:str):
+        
+        # Select the columns you want to save
+        selected_columns = ['pos_x', 'pos_y', 'orientation_z']
+        new_df = self.data[selected_columns]
+        # Save the selected columns to a CSV file
+        new_df.to_csv(out_csv_filepath, index=False)
+
+
 class LidarOdomDataset_Tyler(Dataset):
     def __init__(self, odom_csv_path: str, scan_csv_path: str):
         odom_df = pd.read_csv(odom_csv_path)
@@ -81,6 +91,7 @@ class LidarOdomDataset_Tyler(Dataset):
         self.orientation_z_std = odom_df['orientation_z'].std()
         
         self.data = merged_df
+
 
     def __len__(self):
         return len(self.data)

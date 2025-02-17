@@ -150,6 +150,7 @@ def train_model(
 
             optimizer.zero_grad()
             preds = model(lidar_batch)
+            print(f"SHAPE = {lidar_batch.shape}")
             loss = criterion(preds, odom_batch)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)

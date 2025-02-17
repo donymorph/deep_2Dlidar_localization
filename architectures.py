@@ -22,6 +22,8 @@ class SimpleMLP(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+
 class MLP_Optuna(nn.Module):
     """
     Multi-Layer Perceptron (MLP) with architecture defined by Optuna hyperparameter tuning:
