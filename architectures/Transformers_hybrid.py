@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
+import matplotlib.pyplot as plt
+import numpy as np
 class TransformerRegressor(nn.Module):
     """
     Minimal transformer-based regressor example in PyTorch.
@@ -77,72 +78,98 @@ class TransformerRegressor(nn.Module):
 ###############################################################################
 class ConvTransformerNet(nn.Module):
     """
-    Combines Conv1D and Transformer layers for processing 1D LiDAR scans and predicting robot position.
-    """
-    def __init__(self, input_size=360, output_size=3, d_model=256, nhead=4, num_encoder_layers=4, dim_feedforward=256, dropout=0.1):
-        super(ConvTransformerNet, self).__init__()
-        
-        # Convolutional layers for feature extraction
-        self.conv = nn.Sequential(
-            DepthwiseSeparableConv1D(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1, dilation=2),
-            nn.BatchNorm1d(16),
-            nn.ReLU(),
-            DepthwiseSeparableConv1D(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1, dilation=2),
-            nn.BatchNorm1d(32),
-            nn.ReLU(),
-            DepthwiseSeparableConv1D(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1, dilation=2),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            DepthwiseSeparableConv1D(in_channels=64, out_channels=d_model, kernel_size=3, stride=2, padding=2, dilation=1),
-            nn.BatchNorm1d(d_model),
-            nn.ReLU(),
-        )
-        # Positional encoding
-        self.positional_encoding = PositionalEncodingCov(d_model=d_model)
+    Encoder-Decoder Transformer for LiDAR-based odometry.
+    
+    - Uses LiDAR scans as the source input (encoder input).
+    - Uses odometry data as the target during training (teacher forcing).
+    - Supports autoregressive decoding during inference.
 
-        # Transformer encoder
-        encoder_layer = nn.TransformerEncoderLayer(
+    During training:
+        lidar_batch.shape -> (batch_size, 360)
+        odom_batch.shape  -> (batch_size, 3)
+        teacher_forcing_ratio -> Probability of using ground truth odom.
+
+    During validation:
+        lidar_batch.shape -> (batch_size, 360)
+        teacher_forcing_ratio -> Passed but ignored (inference mode).
+    """
+    def __init__(
+        self,
+        input_size=360,       # LiDAR scan length (number of beams)
+        d_model=32,           # Transformer hidden dimension
+        nhead=2,              # Number of attention heads
+        num_encoder_layers=2, # Number of encoder layers
+        num_decoder_layers=2, # Number of decoder layers
+        dim_feedforward=128,  # Transformer feedforward dimension
+        dropout=0.1,          # Dropout rate
+        output_size=3         # Output dimensions (x, y, orientation_z)
+    ):
+        super().__init__()
+
+        self.d_model = d_model
+        self.output_size = output_size
+
+        # ---- LiDAR Encoder ----
+        self.lidar_embedding = nn.Linear(1, d_model)
+        self.lidar_pos_enc = PositionalEncodingCov(d_model, max_len=input_size)
+
+        # ---- Odometry Decoder ----
+        self.odom_embedding = nn.Linear(output_size, d_model)
+        self.odom_pos_enc = PositionalEncodingCov(d_model, max_len=1)  # Single step decoding
+
+        # ---- Transformer Encoder-Decoder ----
+        self.transformer = nn.Transformer(
             d_model=d_model,
             nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=True  # Ensures input is (batch, seq, feature)
-        )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-
-        # Fully connected layers
-        self.fc = nn.Sequential(
-            nn.Linear(d_model, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, output_size),
+            batch_first=True
         )
 
-    def forward(self, x):
-        # Input shape: (batch_size, input_size)
-        x = x.unsqueeze(1)  # Add channel dimension: (batch_size, 1, input_size)
+        # Final projection from d_model → output_size
+        self.fc_out = nn.Linear(d_model, output_size)
 
-        # Pass through Conv1D layers
-        out = self.conv(x)  # Shape: (batch_size, d_model, seq_len)
+        # Learnable start token for autoregressive decoding
+        self.start_token = nn.Parameter(torch.zeros(1, 1, output_size))
 
-        # Reshape for Transformer (batch, seq_len, d_model)
-        out = out.permute(0, 2, 1)  # (batch, seq_len, d_model)
-        
-        # Add positional encoding
-        out = self.positional_encoding(out)
+    def forward(self, lidar_batch, odom_batch=None, teacher_forcing_ratio=0.5):
+        """
+        Args:
+            lidar_batch: (batch_size, 360) - LiDAR scan input.
+            odom_batch: (batch_size, 3) - Odometry target for training.
+            teacher_forcing_ratio: Probability of using true odometry in training.
 
-        # Pass through Transformer Encoder
-        out = self.transformer_encoder(out)  # Shape: (batch, seq_len, d_model)
+        Returns:
+            predictions: (batch_size, 3) - Final odometry prediction.
+        """
+        batch_size = lidar_batch.size(0)
 
-        # Use the output of the last token
-        out = out[:, -1, :]  # Shape: (batch, d_model)
+        # ---- Encode LiDAR Source ----
+        lidar_src = self.lidar_embedding(lidar_batch.unsqueeze(-1))  # (batch, 360, d_model)
+        lidar_src = self.lidar_pos_enc(lidar_src)
+        encoder_output = self.transformer.encoder(lidar_src)
 
-        # Pass through fully connected layers
-        out = self.fc(out)  # Shape: (batch, output_size)
-        return out
+        # ---- Decoder: Teacher Forcing or Autoregressive ----
+        if self.training and odom_batch is not None:
+            # Teacher forcing: Use ground truth odometry as decoder input
+            use_teacher_forcing = torch.rand(1).item() < teacher_forcing_ratio
+            if use_teacher_forcing:
+                odom_tgt = self.odom_embedding(odom_batch.unsqueeze(1))  # (batch, 1, d_model)
+                odom_tgt = self.odom_pos_enc(odom_tgt)
+                decoder_output = self.transformer.decoder(tgt=odom_tgt, memory=encoder_output)
+                return self.fc_out(decoder_output[:, -1, :])  # (batch, 3)
+
+        # Inference mode (or when teacher forcing is OFF)
+        current_tgt = self.start_token.expand(batch_size, 1, self.output_size).to(lidar_batch.device)
+
+        # Decode one-step prediction
+        odom_tgt = self.odom_embedding(current_tgt)  # (batch, 1, d_model)
+        odom_tgt = self.odom_pos_enc(odom_tgt)
+        decoder_output = self.transformer.decoder(tgt=odom_tgt, memory=encoder_output)
+
+        return self.fc_out(decoder_output[:, -1, :])  # (batch, 3)
     
 class DepthwiseSeparableConv1D(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dilation):
@@ -159,19 +186,52 @@ class PositionalEncodingCov(nn.Module):
     """
     Adds positional encoding to the input sequence to allow the Transformer to capture order information.
     """
-    def __init__(self, d_model, max_len=500):
+    def __init__(self, d_model, max_len):
         super(PositionalEncodingCov, self).__init__()
         self.encoding = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        position = torch.arange(max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
         self.encoding[:, 0::2] = torch.sin(position * div_term)
         self.encoding[:, 1::2] = torch.cos(position * div_term)
         self.encoding = self.encoding.unsqueeze(0)  # Shape: (1, max_len, d_model)
 
     def forward(self, x):
-        seq_len = x.size(1)  # Sequence length from input
-        return x + self.encoding[:, :seq_len, :].to(x.device)  # Add positional encoding
+        seq_len = x.size(1)  # Get actual sequence length
+        max_len = self.encoding.shape[1]
+        if seq_len > max_len:  # Ensure it's within bounds
+            raise ValueError(f"Sequence length {seq_len} exceeds max_len {max_len}")
+        return x + self.encoding[:, :seq_len, :].to(x.device)
     
+    def visualize_encoding(self, num_positions=100, num_dimensions=6):
+        """
+        Visualizes the positional encoding over a subset of positions.
+        
+        Args:
+            num_positions (int): Number of positions to visualize.
+            num_dimensions (int): Number of encoding dimensions to plot.
+        """
+        pos_enc = self.encoding[0, :num_positions, :].cpu().numpy()
+
+        # ---- Line Plot: Encoding Values Over Positions ----
+        plt.figure(figsize=(12, 5))
+        for i in range(min(num_dimensions, pos_enc.shape[1])):  # Plot only a few dimensions
+            plt.plot(np.arange(num_positions), pos_enc[:, i], label=f"Dim {i}")
+        
+        plt.xlabel("Position Index")
+        plt.ylabel("Encoding Value")
+        plt.title("Positional Encoding Values Over Positions")
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+        # ---- Heatmap: Encoding Over Positions & Features ----
+        plt.figure(figsize=(12, 5))
+        plt.imshow(pos_enc.T, aspect='auto', cmap='coolwarm', interpolation='nearest')
+        plt.colorbar(label="Encoding Value")
+        plt.xlabel("Position Index")
+        plt.ylabel("Feature Dimension")
+        plt.title(f"Positional Encoding Heatmap (First {num_positions} Positions)")
+        plt.show()
 class CNNTransformerNet_Optuna(nn.Module):
     """
     A hybrid 1D CNN + Transformer for LiDAR-based regression tasks.
@@ -389,3 +449,25 @@ class LiDARFormer(nn.Module):
         out = self.fc(pooled)  # (B, output_size)
         return out
     
+# def generate_fake_lidar_data(batch_size=16, num_beams=360):
+#     """Simulates 1D LiDAR scans with range values between 0 and 10 meters."""
+#     torch.manual_seed(42)  # Ensure reproducibility
+#     return torch.rand(batch_size, num_beams, 1) * 10  # Shape: (B, num_beams, 1)
+
+# # Apply Positional Encoding
+# d_model = 16  # Number of features per position
+# num_beams = 360
+# batch_size = 2  # Visualizing one sample
+
+# lidar_data = generate_fake_lidar_data(batch_size=batch_size, num_beams=num_beams)
+# pos_encoder = PositionalEncodingCov(d_model=d_model, max_len=num_beams)
+# encoded_lidar_data = pos_encoder(lidar_data.expand(-1, -1, d_model))  # Expand features
+
+# # Visualization
+# plt.figure(figsize=(12, 6))
+# plt.imshow(encoded_lidar_data[0].cpu().detach().numpy().T, aspect='auto', cmap='coolwarm')
+# plt.colorbar(label="Encoding Value")
+# plt.xlabel("LiDAR Beam Index")
+# plt.ylabel("Feature Dimension")
+# plt.title("Positional Encoding Applied to 1D LiDAR Data")
+# plt.show()

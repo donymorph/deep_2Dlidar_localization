@@ -46,13 +46,21 @@ class CNNLSTMNet_modified(nn.Module):
         self.lstm = nn.LSTM(
             input_size=conv_flat_dim,
             hidden_size=192,
-            num_layers=5,
+            num_layers=1,
             batch_first=True,
             #dropout=0.4
         )
         
         # Fully connected output layer
-        self.fc = nn.Linear(192, output_size)
+        self.fc = nn.Sequential( 
+            nn.Linear(192, 96),
+            nn.ReLU(),
+            nn.Linear(96, 48),
+            nn.ReLU(),
+            nn.Linear(48, 24),
+            nn.ReLU(),
+            nn.Linear(24, output_size)
+        )
 
     def forward(self, x):
         """
@@ -138,14 +146,14 @@ class CNNLSTMNet_modified2(nn.Module):
             nn.Conv1d(in_channels=32, out_channels=48, kernel_size=3, stride=1, padding=3 // 2),
             nn.BatchNorm1d(48),
             nn.Tanh(),
-            #nn.Dropout(p=0.3),
+            nn.Dropout(p=0.1),
             nn.MaxPool1d(kernel_size=2, stride=2),
             
             # New Conv Layer 4
             nn.Conv1d(in_channels=48, out_channels=64, kernel_size=3, stride=1, padding=3 // 2),
             nn.BatchNorm1d(64),
             nn.Tanh(),
-            #nn.Dropout(p=0.3),
+            #nn.Dropout(p=0.1),
             nn.MaxPool1d(kernel_size=2, stride=2),
             
             # New Conv Layer 5
@@ -216,4 +224,27 @@ class CNNLSTMNet_modified2(nn.Module):
         
         # Pass the context vector through the fully connected head for final prediction
         output = self.fc(context)
+        return output
+    
+class LSTMNet(nn.Module):
+    """
+    Standard LSTM-based network for LiDAR odometry.
+    
+    Input: (batch_size, 360)  -- 360 beams
+    Output: (batch_size, 3)  -- Predicts pos_x, pos_y, orientation_z.
+    """
+    def __init__(self, input_size=1, hidden_dim=192, num_layers=1, output_size=3):
+        super(LSTMNet, self).__init__()
+        self.lstm = nn.LSTM(1, hidden_dim, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_size)
+    
+    def forward(self, x):
+        # x shape: (batch_size, 360)
+        if x.dim() == 2:
+            x = x.unsqueeze(-1) # Add channel dimension (batch_size, 1, 360)
+        # LSTM output: (batch_size, seq_len, hidden_dim)
+        out, (h_n, c_n) = self.lstm(x)
+        # Use the last hidden state (from the last layer)
+        last_hidden = h_n[-1]  # shape: (batch_size, hidden_dim)
+        output = self.fc(last_hidden)  # shape: (batch_size, output_size)
         return output

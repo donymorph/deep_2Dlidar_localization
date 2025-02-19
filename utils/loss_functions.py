@@ -37,7 +37,7 @@ class PoseLoss(nn.Module):
         orient_target = target[:, 2]
         
         # Position loss: Smooth L1 Loss (robust regression loss)
-        pos_loss = F.smooth_l1_loss(pos_pred, pos_target, reduction='mean')
+        pos_loss = F.huber_loss(pos_pred, pos_target, reduction='mean')
         
         # Orientation loss: 1 - cos(angle difference)
         # This formulation makes sure that differences like 359° and 1° are considered small.

@@ -9,15 +9,16 @@ from architectures.architectures import (
     SimpleMLP, MLP_Optuna,
     Conv1DNet, Conv1DNet_Optuna,
     Conv1DLSTMNet, CNNLSTMNet_Optuna,
-    ConvTransformerNet, CNNTransformerNet_Optuna
+    CNNTransformerNet_Optuna
 )
 from torch.optim.lr_scheduler import StepLR
 from splitting import split_dataset_tyler
 from utils.utils import visualize_test_loader_static, calc_accuracy_percentage_xy, setup_logger, get_device, setup_tensorboard
 from architectures.Mamba import MambaModel, Mamba2Model, MambaModel_simple
-from architectures.hybridCNN_LSTM import CNNLSTMNet_modified, CNNLSTMNet_modified2
-from architectures.Transformers_hybrid import LiDARFormer
-from architectures.graphNN import GraphLocalizationNet
+from architectures.hybridCNN_LSTM import CNNLSTMNet_modified, CNNLSTMNet_modified2, LSTMNet
+from architectures.test import DSLOModel
+from architectures.Transformers_hybrid import LiDARFormer, ConvTransformerNet
+from architectures.graphNN import GraphLocalizationNet, visualize_lidar_batch1d, visualize_lidar_batch2d
 from utils.loss_functions import PoseLoss, LogCoshPoseLoss
 logger = setup_logger()
 device = get_device()
@@ -64,7 +65,9 @@ def initialize_model(model_choice, input_size):
         'MambaModel_simple': MambaModel_simple,
         'Mamba2Model': Mamba2Model,
         'LiDARFormer': LiDARFormer,
-        'GraphLocalizationNet': GraphLocalizationNet
+        'GraphLocalizationNet': GraphLocalizationNet,
+        'LSTMNet': LSTMNet,
+        'DSLOModel': DSLOModel
     }
     
     if model_choice not in model_dict:
@@ -81,7 +84,10 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
     total_train_loss = 0.0
     for lidar_batch, odom_batch in train_loader:
         lidar_batch, odom_batch = lidar_batch.to(device), odom_batch.to(device)
+        #batch_data = model.convert_scan_to_graph_embedding(lidar_batch)
+        #visualize_graph(batch_data[0])
         optimizer.zero_grad()
+        #preds = model(lidar_batch, odom_batch, teacher_forcing_ratio)
         preds = model(lidar_batch)
         loss = criterion(preds, odom_batch)
         loss.backward()
@@ -143,15 +149,17 @@ def train_model(
     batch_size=32,
     lr=1e-3,
     epochs=10,
-    train_ratio=0.7,
-    val_ratio=0.2,
+    train_ratio=0.8,
+    val_ratio=0.1,
     test_ratio=0.1,
     random_seed=42,
     log_dir=None,
-    do_visualize=False
+    do_visualize=False,
+    #initial_teacher_forcing=1.0, 
+    #final_teacher_forcing=0.1
 ):
     
-   #writer = setup_tensorboard(log_dir, model_choice, lr, batch_size)
+    writer = setup_tensorboard(log_dir, model_choice, lr, batch_size)
 
     # Load and split data
     train_subset, val_subset, test_subset, input_size = load_and_split_data(
@@ -169,14 +177,15 @@ def train_model(
     
     # Loss, optimizer, scheduler
     criterion = PoseLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01, lr=lr)
-    scheduler = StepLR(optimizer, step_size=50, gamma=0.8)
+    optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.0, lr=lr)
+    #scheduler = StepLR(optimizer, step_size=50, gamma=0.8)
     
     # Training loop
     train_losses, val_losses, epoch_times = [], [], []
     for epoch in range(epochs):
         start_time = time.time()
         
+        #teacher_forcing_ratio = initial_teacher_forcing - (epoch / epochs) * (initial_teacher_forcing - final_teacher_forcing)
         # Training
         avg_train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
 
@@ -184,17 +193,17 @@ def train_model(
         avg_val_loss, acc_perc = validate_epoch(model, val_loader, criterion, device)
 
         # Scheduler step
-        scheduler.step()
+        #scheduler.step()
 
         # Time measurement
         epoch_time = time.time() - start_time
         epoch_times.append(epoch_time)
 
         # TensorBoard logging
-        # writer.add_scalar("Metrics/Accuracy", acc_perc, epoch)
-        # writer.add_scalar("Metrics/Train Loss", avg_train_loss, epoch)
-        # writer.add_scalar("Metrics/Val Loss", avg_val_loss, epoch)
-        # writer.add_scalar("Time/Epoch Time", epoch_time, epoch)
+        writer.add_scalar("Metrics/Accuracy", acc_perc, epoch)
+        writer.add_scalar("Metrics/Train Loss", avg_train_loss, epoch)
+        writer.add_scalar("Metrics/Val Loss", avg_val_loss, epoch)
+        writer.add_scalar("Time/Epoch Time", epoch_time, epoch)
 
         # Logging
         logger.info(
@@ -210,7 +219,7 @@ def train_model(
     logger.info(f"Final Test Loss: {final_test_loss:.4f}")
 
     # Save the model
-    #save_model(model, model_choice, lr, batch_size)
+    save_model(model, model_choice, lr, batch_size)
 
     # Visualize if required
     if do_visualize:
@@ -228,10 +237,10 @@ def main():
     final_loss, epoch_times = train_model(
         odom_csv='odom_data.csv',
         scan_csv='scan_data.csv',
-        model_choice='GraphLocalizationNet',  # Select model
-        batch_size=32,
-        lr=0.0001,
-        epochs=10,
+        model_choice='DSLOModel',  # Select model
+        batch_size=16,
+        lr=6.89e-5,
+        epochs=100,
         do_visualize=True
     )
     logger.info(f"Training script done. Final Loss: {final_loss:.4f}")
