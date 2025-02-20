@@ -5,6 +5,7 @@ import sys
 import torch
 import torch.nn as nn
 import torch.optim as optim
+#from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 import optuna
 from optuna.trial import TrialState
@@ -153,7 +154,7 @@ class TransformerNet(nn.Module):
         self.input_linear = nn.Linear(1, d_model)
         encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                                    dim_feedforward=dim_feedforward, dropout=dropout,
-                                                   activation='relu')
+                                                   activation='relu', batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
         self.global_pool = nn.AdaptiveAvgPool1d(1)
         self.feature_dim = d_model
@@ -268,6 +269,8 @@ def train_and_eval_model(model, train_loader, val_loader, device, trial, max_epo
         #trial.report(val_loss, epoch)
         trial.report(accuracy, epoch)
         trial.set_user_attr("accuracy", accuracy)
+        trial.set_user_attr("training Loss", train_loss)
+        trial.set_user_attr("validation Loss", val_loss)
         if trial.should_prune():
             raise optuna.TrialPruned()
         model.train()
@@ -295,10 +298,8 @@ def objective(trial):
     if "+" not in model_type:
         if model_type == "mlp":
             num_hidden_layers = trial.suggest_int("mlp_num_hidden_layers", 1, 5)
-            hidden_sizes = []
-            for i in range(num_hidden_layers):
-                h_size = trial.suggest_int(f"mlp_hidden_layer_{i}_size", 32, 256, step=32)
-                hidden_sizes.append(h_size)
+            hidden_sizes = [trial.suggest_int(f"mlp_hidden_layer_{i}_size", 32, 256, step=32)
+                            for i in range(num_hidden_layers)]
             activation_name = trial.suggest_categorical("mlp_activation_fn", ["ReLU", "Tanh", "LeakyReLU"])
             activation_fn = getattr(nn, activation_name)
             dropout = trial.suggest_float("mlp_dropout", 0.0, 0.5, step=0.1)
@@ -370,10 +371,8 @@ def objective(trial):
         for branch in branches:
             if branch == "mlp":
                 num_hidden_layers = trial.suggest_int("mlp_branch_num_hidden_layers", 1, 3)
-                hidden_sizes = []
-                for i in range(num_hidden_layers):
-                    h_size = trial.suggest_int(f"mlp_branch_hidden_{i}_size", 32, 128, step=32)
-                    hidden_sizes.append(h_size)
+                hidden_sizes = [trial.suggest_int(f"mlp_hidden_layer_{i}_size", 32, 256, step=32)
+                                for i in range(num_hidden_layers)]
                 activation_name = trial.suggest_categorical("mlp_branch_activation_fn", ["ReLU", "Tanh", "LeakyReLU"])
                 activation_fn = getattr(nn, activation_name)
                 dropout = trial.suggest_float("mlp_branch_dropout", 0.0, 0.5, step=0.1)
@@ -455,6 +454,7 @@ if __name__ == "__main__":
     train_ds, val_ds, test_ds, input_size, output_size = create_dataset_and_loaders()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cpu")
     logger.info(f"Using device: {device}")
 
     # Expose global variables for the objective function
